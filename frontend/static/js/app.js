@@ -540,7 +540,7 @@ class ITSupportAgent {
 
             // Update UI
             this.elements.btnVoice.classList.add('recording');
-            this.elements.btnVoice.textContent = '🎤 Recording...';
+            this.elements.btnVoice.textContent = 'Recording...';
             this.elements.voiceStatus.textContent = 'Listening...';
 
         } catch (error) {
@@ -560,7 +560,7 @@ class ITSupportAgent {
 
             // Update UI
             this.elements.btnVoice.classList.remove('recording');
-            this.elements.btnVoice.textContent = '🎤 Hold to Speak';
+            this.elements.btnVoice.textContent = 'Hold to Speak';
             this.elements.voiceStatus.textContent = 'Processing...';
         }
     }
