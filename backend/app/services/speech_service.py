@@ -17,10 +17,14 @@ class SpeechService:
     """Service for speech recognition and synthesis"""
 
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=api_key) if api_key else None
         self.stt_model = "whisper-1"
         self.tts_model = "tts-1"
         self.tts_voice = "nova"  # Options: alloy, echo, fable, onyx, nova, shimmer
+
+        if not self.client:
+            print("⚠️ OpenAI API key not set - speech features disabled")
 
     async def transcribe(
         self,
@@ -37,6 +41,9 @@ class SpeechService:
         Returns:
             Transcribed text
         """
+        if not self.client:
+            raise Exception("OpenAI API key not configured - speech-to-text unavailable")
+
         try:
             # Determine file extension
             extension = ".webm"  # Default for browser audio
@@ -84,6 +91,9 @@ class SpeechService:
         Returns:
             Base64 encoded MP3 audio
         """
+        if not self.client:
+            raise Exception("OpenAI API key not configured - text-to-speech unavailable")
+
         try:
             response = self.client.audio.speech.create(
                 model=self.tts_model,
