@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Support Agent</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🤖 IT Support Agent</h1>
+            <p class="subtitle">AI-Powered Technical Support</p>
+        </header>
+
+        <!-- Session Code Entry (shown first) -->
+        <div id="session-entry" class="card">
+            <h2>Start Support Session</h2>
+            <div class="session-options">
+                <button id="btn-new-session" class="btn btn-primary btn-large">
+                    Start New Session
+                </button>
+                <div class="divider">or</div>
+                <div class="code-entry">
+                    <label for="session-code">Enter Session Code:</label>
+                    <input type="text" id="session-code" placeholder="1234" maxlength="4" pattern="[0-9]*">
+                    <button id="btn-join-session" class="btn btn-secondary">Join</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Support Interface (hidden until session starts) -->
+        <div id="support-interface" class="hidden">
+            <!-- Session Info Bar -->
+            <div class="session-bar">
+                <span class="session-id">Session: <strong id="display-session-code">----</strong></span>
+                <span class="session-status" id="session-status">● Connected</span>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message assistant">
+                        <div class="message-content">
+                            👋 Hello! I'm your IT Support Agent. How can I help you today?
+                            <br><br>
+                            You can describe your problem, and I'll help you solve it.
+                            If you'd like me to see your screen, click the "Share Screen" button below.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <!-- Screen Share -->
+                <div class="control-group">
+                    <button id="btn-share-screen" class="btn btn-screen">
+                        📺 Share Screen
+                    </button>
+                    <button id="btn-stop-share" class="btn btn-danger hidden">
+                        ⏹️ Stop Sharing
+                    </button>
+                    <button id="btn-capture" class="btn btn-secondary hidden">
+                        📸 Capture Screen
+                    </button>
+                </div>
+
+                <!-- Voice Controls -->
+                <div class="control-group">
+                    <button id="btn-voice" class="btn btn-voice">
+                        🎤 Hold to Speak
+                    </button>
+                    <span id="voice-status" class="status-text"></span>
+                </div>
+
+                <!-- Text Input -->
+                <div class="input-group">
+                    <input type="text" id="message-input" placeholder="Type your message here...">
+                    <button id="btn-send" class="btn btn-primary">Send</button>
+                </div>
+            </div>
+
+            <!-- Screen Preview (shown when sharing) -->
+            <div id="screen-preview" class="screen-preview hidden">
+                <video id="screen-video" autoplay muted></video>
+                <canvas id="screen-canvas" class="hidden"></canvas>
+            </div>
+        </div>
+
+        <!-- Audio element for TTS playback -->
+        <audio id="tts-audio" class="hidden"></audio>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
