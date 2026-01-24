@@ -1,29 +1,27 @@
 # FastAPI and server
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
-websockets==12.0
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+websockets>=12.0
 
 # Anthropic Claude
-anthropic==0.18.1
+anthropic>=0.40.0
 
-# OpenAI (for Whisper STT and TTS)
-openai==1.12.0
+# OpenAI (for Whisper STT)
+openai>=1.50.0
 
 # Audio processing
-pydub==0.25.1
+pydub>=0.25.1
 
 # Image processing
 Pillow>=10.4.0
 
 # Environment variables
-python-dotenv==1.0.1
-
-# Session management (uuid is built-in)
+python-dotenv>=1.0.1
 
 # Async support
-aiofiles==23.2.1
-aiohttp==3.9.3
+aiofiles>=23.2.1
+aiohttp>=3.10.0
 
-# CORS
-starlette==0.35.1
+# Jinja2 for templates
+jinja2>=3.1.2
