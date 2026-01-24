@@ -20,38 +20,40 @@ class ClaudeService:
         self.model = "claude-sonnet-4-20250514"  # Use Claude Sonnet for good balance of speed/quality
         self.vision_model = "claude-sonnet-4-20250514"  # Vision capable model
 
-        # System prompt for IT Support Agent
-        self.system_prompt = """You are a friendly and helpful IT Support Agent. Your role is to help users solve computer problems.
+        # System prompt - Friendly AI assistant with screen vision
+        self.system_prompt = """You're a friendly AI buddy who can see the user's screen.
 
-PERSONALITY:
-- Speak in a warm, professional tone like a helpful IT technician
-- Be patient and understanding - users may not be tech-savvy
-- Explain things simply without jargon
-- Always reassure users that their problem can be solved
+HOW TO RESPOND:
+- Short sentences, one idea each
+- Put each thought on its own line (blank line between)
+- No special characters, no bullets, no asterisks
+- Just plain simple text
+- Max 3-5 lines total
 
-CAPABILITIES:
-- You can SEE the user's screen through screenshots they share
-- You can GUIDE users step by step through solutions
-- You will eventually be able to CONTROL their mouse/keyboard (not yet in Phase 1)
+EXAMPLE:
+Got it, WiFi issue.
 
-WHEN ANALYZING SCREENSHOTS:
-1. Describe what you see on the screen
-2. Identify any error messages, dialog boxes, or relevant UI elements
-3. Determine the current state of the system
-4. Provide clear, numbered steps for the user to follow
-5. Ask the user to share another screenshot after they complete steps if needed
+Click the network icon in the bottom right.
 
-RESPONSE FORMAT:
-- Keep responses concise but complete
-- Use numbered steps for instructions
-- Highlight important buttons or menu items in quotes (e.g., Click "Settings")
-- If you need more information, ask specific questions
-- Always end with a clear next action for the user
+Pick your network and reconnect.
 
-IMPORTANT:
-- If you cannot solve a problem, be honest and suggest escalation
-- Never ask users to do anything that could harm their computer
-- If you see sensitive information (passwords, personal data), do not mention or reference it"""
+VIBE:
+- Text like a friend
+- Casual and warm
+- No filler words
+- Skip the formalities
+
+BAD:
+"I can see that you're experiencing a WiFi connectivity issue. The network icon shows you're disconnected. To fix this, click the network icon in the bottom right corner and select your network."
+
+GOOD:
+WiFi's disconnected.
+
+Click the network icon bottom right.
+
+Pick your network.
+
+You'll be back online in a sec."""
 
     async def analyze_screen(
         self,
@@ -104,7 +106,7 @@ IMPORTANT:
             else:
                 content.append({
                     "type": "text",
-                    "text": "Please analyze this screenshot and tell me what you see. If there are any issues or error messages, explain what they mean and how to fix them."
+                    "text": "What do you see on this screen? Describe what's happening and share any relevant observations or insights."
                 })
 
             messages.append({
@@ -115,7 +117,7 @@ IMPORTANT:
             # Call Claude API
             response = self.client.messages.create(
                 model=self.vision_model,
-                max_tokens=1024,
+                max_tokens=512,
                 system=self.system_prompt,
                 messages=messages
             )
@@ -171,7 +173,7 @@ IMPORTANT:
             # Call Claude API
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=1024,
+                max_tokens=512,
                 system=self.system_prompt,
                 messages=messages
             )
@@ -225,3 +227,241 @@ Format your response as a numbered list of clear, specific steps."""
             user_message=planning_prompt,
             conversation_history=conversation_history
         )
+
+    def _format_kb_context(self, kb_context: Dict[str, Any]) -> str:
+        """
+        Format Knowledge Base context for the system prompt
+
+        Args:
+            kb_context: KB search results with problems and solutions
+
+        Returns:
+            Formatted string for system prompt
+        """
+        if not kb_context or not kb_context.get("has_matches"):
+            return ""
+
+        lines = ["\n--- KNOWLEDGE BASE MATCHES ---"]
+
+        problems = kb_context.get("problems", [])
+        for i, problem in enumerate(problems[:3], 1):
+            lines.append(f"\nProblem {i}: {problem['title']} (Category: {problem['category']})")
+            lines.append(f"Description: {problem['description']}")
+
+            solutions = problem.get("solutions", [])
+            for j, solution in enumerate(solutions[:2], 1):
+                success_rate = solution.get("success_rate", 0)
+                lines.append(f"  Solution {j}: {solution['title']} (Success rate: {success_rate:.0%})")
+                lines.append(f"    ID: {solution['id']}")
+                lines.append("    Steps:")
+                for step in solution.get("steps", []):
+                    lines.append(f"      - {step}")
+
+        lines.append("\n--- END KB MATCHES ---")
+        return "\n".join(lines)
+
+    def _format_task_context(self, task_context: Dict[str, Any]) -> str:
+        """
+        Format Task Plan context for the system prompt
+
+        Args:
+            task_context: Active task plan data
+
+        Returns:
+            Formatted string for system prompt
+        """
+        if not task_context or not task_context.get("has_active_plan"):
+            return ""
+
+        plan = task_context.get("plan", {})
+        current_step = task_context.get("current_step")
+        progress = task_context.get("progress", {})
+
+        lines = ["\n--- ACTIVE TASK PLAN ---"]
+        lines.append(f"Plan: {plan.get('title', 'Unknown')}")
+        lines.append(f"Progress: {progress.get('completed', 0)}/{progress.get('total', 0)} steps completed ({progress.get('percent', 0)}%)")
+
+        if current_step:
+            lines.append(f"\nCURRENT STEP ({current_step.get('order', '?')}/{progress.get('total', '?')}):")
+            lines.append(f"  Title: {current_step.get('title', 'Unknown')}")
+            lines.append(f"  Description: {current_step.get('description', 'No description')}")
+            lines.append(f"  Step ID: {current_step.get('id', '')}")
+            lines.append("\nGuide the user through this step. When they complete it, they can mark it done.")
+        else:
+            lines.append("\nAll steps have been addressed.")
+
+        lines.append("\n--- END TASK PLAN ---")
+        return "\n".join(lines)
+
+    async def chat_with_context(
+        self,
+        message: str,
+        conversation_history: List[Dict] = None,
+        kb_context: Dict[str, Any] = None,
+        task_context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Chat with Claude including KB and task context
+
+        Args:
+            message: User's message
+            conversation_history: Previous messages
+            kb_context: Knowledge Base search results
+            task_context: Active task plan data
+
+        Returns:
+            Dict with 'response' key containing AI's response
+        """
+        try:
+            # Build enhanced system prompt
+            enhanced_prompt = self.system_prompt
+
+            # Add KB context
+            kb_section = self._format_kb_context(kb_context)
+            if kb_section:
+                enhanced_prompt += kb_section
+
+            # Add task context
+            task_section = self._format_task_context(task_context)
+            if task_section:
+                enhanced_prompt += task_section
+
+            # Build messages array
+            messages = []
+
+            # Add conversation history
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            # Add current message
+            messages.append({
+                "role": "user",
+                "content": message
+            })
+
+            # Call Claude API
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=512,
+                system=enhanced_prompt,
+                messages=messages
+            )
+
+            return {
+                "response": response.content[0].text,
+                "usage": {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens
+                },
+                "had_kb_context": bool(kb_section),
+                "had_task_context": bool(task_section)
+            }
+
+        except anthropic.APIError as e:
+            print(f"Claude API error: {e}")
+            return {
+                "response": "I'm having trouble responding right now. Please try again in a moment.",
+                "error": str(e)
+            }
+
+    async def analyze_screen_with_context(
+        self,
+        image_base64: str,
+        user_message: Optional[str] = None,
+        conversation_history: List[Dict] = None,
+        kb_context: Dict[str, Any] = None,
+        task_context: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze a screenshot with KB and task context
+
+        Args:
+            image_base64: Base64 encoded screenshot
+            user_message: User's question
+            conversation_history: Previous messages
+            kb_context: Knowledge Base search results
+            task_context: Active task plan data
+
+        Returns:
+            Dict with 'response' key containing AI's analysis
+        """
+        try:
+            # Build enhanced system prompt
+            enhanced_prompt = self.system_prompt
+
+            # Add KB context
+            kb_section = self._format_kb_context(kb_context)
+            if kb_section:
+                enhanced_prompt += kb_section
+
+            # Add task context
+            task_section = self._format_task_context(task_context)
+            if task_section:
+                enhanced_prompt += task_section
+
+            # Build messages array
+            messages = []
+
+            # Add conversation history
+            if conversation_history:
+                for msg in conversation_history[-10:]:
+                    messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            # Build current message with image
+            content = []
+            content.append({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": image_base64
+                }
+            })
+
+            if user_message:
+                content.append({
+                    "type": "text",
+                    "text": user_message
+                })
+            else:
+                content.append({
+                    "type": "text",
+                    "text": "What do you see on this screen? Describe what's happening and share any relevant observations or insights."
+                })
+
+            messages.append({
+                "role": "user",
+                "content": content
+            })
+
+            # Call Claude API
+            response = self.client.messages.create(
+                model=self.vision_model,
+                max_tokens=512,
+                system=enhanced_prompt,
+                messages=messages
+            )
+
+            return {
+                "response": response.content[0].text,
+                "usage": {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens
+                },
+                "had_kb_context": bool(kb_section),
+                "had_task_context": bool(task_section)
+            }
+
+        except anthropic.APIError as e:
+            print(f"Claude API error: {e}")
+            return {
+                "response": "I'm having trouble analyzing the screen right now. Please try again in a moment.",
+                "error": str(e)
+            }

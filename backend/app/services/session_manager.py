@@ -12,12 +12,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import database (lazy to avoid circular imports)
+_db = None
+def get_db():
+    global _db
+    if _db is None:
+        from .database import db
+        _db = db
+    return _db
+
 
 class SessionManager:
     """Manages support sessions with conversation history"""
 
     def __init__(self):
-        # In-memory session storage (would use Redis/DB in production)
+        # In-memory cache for fast access
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.code_to_session: Dict[str, str] = {}  # Maps short codes to session IDs
         self.timeout_minutes = int(os.getenv("SESSION_TIMEOUT_MINUTES", 30))
@@ -73,9 +82,15 @@ class SessionManager:
             }
         }
 
-        # Store session
+        # Store session in memory and database
         self.sessions[session_id] = session
         self.code_to_session[code] = session_id
+
+        # Persist to database
+        try:
+            get_db().save_session(session_id, code, [])
+        except Exception as e:
+            print(f"DB save error: {e}")
 
         print(f"📝 Created session: {session_id} (code: {code})")
 
@@ -93,8 +108,27 @@ class SessionManager:
         """
         session = self.sessions.get(session_id)
 
+        # Try loading from database if not in memory
+        if not session:
+            try:
+                db_session = get_db().get_session(session_id)
+                if db_session:
+                    session = {
+                        "id": db_session["id"],
+                        "code": db_session["code"],
+                        "created_at": db_session["created_at"],
+                        "updated_at": datetime.now().isoformat(),
+                        "status": "active",
+                        "messages": db_session.get("messages", []),
+                        "screenshots": [],
+                        "metadata": {}
+                    }
+                    self.sessions[session_id] = session
+                    self.code_to_session[db_session["code"]] = session_id
+            except Exception as e:
+                print(f"DB load error: {e}")
+
         if session:
-            # Update last accessed time
             session["updated_at"] = datetime.now().isoformat()
 
         return session
@@ -112,6 +146,15 @@ class SessionManager:
         session_id = self.code_to_session.get(code)
         if session_id:
             return self.get_session(session_id)
+
+        # Try loading from database
+        try:
+            db_session = get_db().get_session_by_code(code)
+            if db_session:
+                return self.get_session(db_session["id"])
+        except Exception as e:
+            print(f"DB load by code error: {e}")
+
         return None
 
     def add_message(
@@ -148,6 +191,12 @@ class SessionManager:
 
         session["messages"].append(message)
         session["updated_at"] = datetime.now().isoformat()
+
+        # Persist to database
+        try:
+            get_db().update_session_messages(session_id, session["messages"])
+        except Exception as e:
+            print(f"DB message save error: {e}")
 
         return True
 

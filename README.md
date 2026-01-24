@@ -1,10 +1,10 @@
-# IT Support Agent
+# Akai - AI Screen Assistant
 
-AI-Powered IT Support Agent - Phase 1: Foundation
+Your friendly AI buddy that can see your screen and help with anything.
 
 ## Overview
 
-This is an AI-powered IT support agent that can:
+Akai is an AI-powered screen assistant that can:
 - 🎤 Listen to users via voice
 - 📺 See user's screen through screen sharing
 - 🤖 Analyze problems using Claude Vision AI

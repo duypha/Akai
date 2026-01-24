@@ -19,8 +19,7 @@ Pillow==10.2.0
 # Environment variables
 python-dotenv==1.0.1
 
-# Session management
-uuid==1.30
+# Session management (uuid is built-in)
 
 # Async support
 aiofiles==23.2.1

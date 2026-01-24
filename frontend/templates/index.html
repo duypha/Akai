@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IT Support Agent</title>
+    <title>Akai</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1>🤖 IT Support Agent</h1>
-            <p class="subtitle">AI-Powered Technical Support</p>
+            <h1>Akai</h1>
+            <p class="subtitle">Your mindful AI companion</p>
         </header>
 
         <!-- Session Code Entry (shown first) -->
@@ -38,39 +38,82 @@
                 <span class="session-status" id="session-status">● Connected</span>
             </div>
 
-            <!-- Chat Area -->
-            <div class="chat-container">
-                <div id="chat-messages" class="chat-messages">
-                    <div class="message assistant">
-                        <div class="message-content">
-                            👋 Hello! I'm your IT Support Agent. How can I help you today?
-                            <br><br>
-                            You can describe your problem, and I'll help you solve it.
-                            If you'd like me to see your screen, click the "Share Screen" button below.
+            <!-- Main Layout with Sidebar -->
+            <div class="main-layout">
+                <!-- Chat Area -->
+                <div class="chat-container">
+                    <div id="chat-messages" class="chat-messages">
+                        <div class="message assistant">
+                            <div class="message-content">
+                                Hello, I'm Akai.
+                            </div>
+                        </div>
+                        <div class="message assistant">
+                            <div class="message-content">
+                                How can I help you today?
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar for KB & Tasks -->
+                <div id="sidebar" class="sidebar hidden">
+                    <!-- KB Solutions Panel -->
+                    <div id="kb-panel" class="sidebar-panel hidden">
+                        <div class="panel-header">
+                            <span>Quick Solutions</span>
+                            <button class="btn-close" onclick="app.closeSidebar()">×</button>
+                        </div>
+                        <div id="kb-solutions" class="panel-content">
+                            <!-- Solutions will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Task Plan Panel -->
+                    <div id="task-panel" class="sidebar-panel hidden">
+                        <div class="panel-header">
+                            <span>Guided Fix</span>
+                            <button class="btn-close" onclick="app.closeSidebar()">×</button>
+                        </div>
+                        <div id="task-content" class="panel-content">
+                            <!-- Task steps will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Template Suggestion -->
+                    <div id="template-panel" class="sidebar-panel hidden">
+                        <div class="panel-header">
+                            <span>Want a guided fix?</span>
+                            <button class="btn-close" onclick="app.closeTemplatePanel()">×</button>
+                        </div>
+                        <div id="template-content" class="panel-content">
+                            <!-- Template suggestion will be inserted here -->
                         </div>
                     </div>
                 </div>
             </div>
+
+            </div><!-- end main-layout -->
 
             <!-- Controls -->
             <div class="controls">
                 <!-- Screen Share -->
                 <div class="control-group">
                     <button id="btn-share-screen" class="btn btn-screen">
-                        📺 Share Screen
+                        Share Screen
                     </button>
                     <button id="btn-stop-share" class="btn btn-danger hidden">
-                        ⏹️ Stop Sharing
+                        Stop Sharing
                     </button>
                     <button id="btn-capture" class="btn btn-secondary hidden">
-                        📸 Capture Screen
+                        Capture
                     </button>
                 </div>
 
                 <!-- Voice Controls -->
                 <div class="control-group">
                     <button id="btn-voice" class="btn btn-voice">
-                        🎤 Hold to Speak
+                        Hold to Speak
                     </button>
                     <span id="voice-status" class="status-text"></span>
                 </div>

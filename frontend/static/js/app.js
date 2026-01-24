@@ -1,6 +1,5 @@
 /**
- * IT Support Agent - Frontend Application
- * Phase 1: Foundation
+ * Akai - AI Screen Assistant
  */
 
 class ITSupportAgent {
@@ -18,6 +17,10 @@ class ITSupportAgent {
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.isRecording = false;
+
+        // KB & Task state
+        this.activePlan = null;
+        this.currentStep = null;
 
         // DOM Elements
         this.elements = {
@@ -50,7 +53,16 @@ class ITSupportAgent {
             voiceStatus: document.getElementById('voice-status'),
 
             // Audio playback
-            ttsAudio: document.getElementById('tts-audio')
+            ttsAudio: document.getElementById('tts-audio'),
+
+            // Sidebar
+            sidebar: document.getElementById('sidebar'),
+            kbPanel: document.getElementById('kb-panel'),
+            kbSolutions: document.getElementById('kb-solutions'),
+            taskPanel: document.getElementById('task-panel'),
+            taskContent: document.getElementById('task-content'),
+            templatePanel: document.getElementById('template-panel'),
+            templateContent: document.getElementById('template-content')
         };
 
         // Initialize
@@ -225,8 +237,31 @@ class ITSupportAgent {
                 this.addMessage('user', data.text);
                 break;
 
+            case 'kb_match':
+                this.showKBSolutions(data.problems, data.top_solutions);
+                break;
+
+            case 'template_detected':
+                this.showTemplateSuggestion(data.template);
+                break;
+
+            case 'task_created':
+                this.showTaskPlan(data.plan);
+                break;
+
+            case 'task_started':
+                this.showTaskPlan(data.plan);
+                break;
+
+            case 'step_completed':
+                this.updateTaskPlan(data.plan, data.next_step, data.is_complete);
+                break;
+
+            case 'step_failed':
+                this.handleStepFailed(data.plan, data.failed_step, data.error_message);
+                break;
+
             case 'pong':
-                // Keep-alive response
                 break;
 
             default:
@@ -292,6 +327,16 @@ class ITSupportAgent {
     }
 
     addMessage(role, content) {
+        // For assistant messages, split by double newlines into multiple bubbles
+        if (role === 'assistant') {
+            // Split on double newlines or "---"
+            const chunks = content.split(/\n\n+|---/).map(c => c.trim()).filter(c => c.length > 0);
+            if (chunks.length > 1) {
+                this.addMessageChunks(chunks);
+                return;
+            }
+        }
+
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
 
@@ -304,6 +349,28 @@ class ITSupportAgent {
 
         // Scroll to bottom
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+    }
+
+    async addMessageChunks(chunks) {
+        for (let i = 0; i < chunks.length; i++) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = chunks[i];
+
+            messageDiv.appendChild(contentDiv);
+            this.elements.chatMessages.appendChild(messageDiv);
+
+            // Scroll to bottom
+            this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+
+            // Small delay between chunks for natural feel (except last one)
+            if (i < chunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+        }
     }
 
     showTypingIndicator() {
@@ -527,29 +594,246 @@ class ITSupportAgent {
         }
     }
 
-    async speakResponse(text) {
+    speakResponse(text) {
+        // Use browser's built-in Web Speech API (free, no API needed)
+        if (!('speechSynthesis' in window)) {
+            console.log('Browser does not support speech synthesis');
+            return;
+        }
+
+        // Clean text - remove special chars, limit length
+        let cleanText = text.replace(/[*#_`]/g, '').trim();
+        if (cleanText.length > 300) {
+            cleanText = cleanText.substring(0, 300);
+        }
+
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        // Try to use a natural voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v =>
+            v.name.includes('Google') ||
+            v.name.includes('Natural') ||
+            v.name.includes('Samantha') ||
+            v.lang.startsWith('en')
+        );
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // ========================================================================
+    // Knowledge Base & Task Planner UI
+    // ========================================================================
+
+    showKBSolutions(problems, solutions) {
+        if (!solutions || solutions.length === 0) return;
+
+        this.elements.sidebar.classList.remove('hidden');
+        this.elements.kbPanel.classList.remove('hidden');
+
+        let html = '';
+        solutions.slice(0, 3).forEach((sol, idx) => {
+            const successRate = Math.round((sol.success_rate || 0) * 100);
+            html += `
+                <div class="solution-card" onclick="app.toggleSolution(this, '${sol.id}')">
+                    <div class="solution-title">${sol.title}</div>
+                    <div class="solution-meta">${sol.problem_title || ''} ${successRate > 0 ? `• ${successRate}% success` : ''}</div>
+                    <div class="solution-steps">
+                        ${sol.steps.map((step, i) => `
+                            <div class="solution-step" data-step="${i + 1}.">${step}</div>
+                        `).join('')}
+                        <div style="margin-top: 8px; display: flex; gap: 6px;">
+                            <button class="btn-step done" onclick="event.stopPropagation(); app.solutionFeedback('${sol.id}', true)">Worked</button>
+                            <button class="btn-step skip" onclick="event.stopPropagation(); app.solutionFeedback('${sol.id}', false)">Didn't work</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        this.elements.kbSolutions.innerHTML = html;
+    }
+
+    toggleSolution(element, solutionId) {
+        element.classList.toggle('expanded');
+    }
+
+    async solutionFeedback(solutionId, success) {
         try {
-            // Limit text length for TTS
-            const ttsText = text.length > 500 ? text.substring(0, 500) + '...' : text;
-
             const formData = new FormData();
-            formData.append('text', ttsText);
+            formData.append('success', success);
 
-            const response = await fetch('/api/voice/synthesize', {
+            await fetch(`/api/knowledge/solutions/${solutionId}/feedback`, {
                 method: 'POST',
                 body: formData
             });
 
-            const data = await response.json();
+            this.addMessage('assistant', success ? 'Great, glad that worked!' : 'Sorry that didn\'t help. Let me try something else.');
+        } catch (err) {
+            console.error('Feedback error:', err);
+        }
+    }
 
-            if (response.ok && data.audio) {
-                // Play audio
-                this.elements.ttsAudio.src = `data:audio/mp3;base64,${data.audio}`;
-                this.elements.ttsAudio.play();
+    showTemplateSuggestion(template) {
+        this.elements.sidebar.classList.remove('hidden');
+        this.elements.templatePanel.classList.remove('hidden');
+
+        this.elements.templateContent.innerHTML = `
+            <div class="template-card">
+                <div class="template-name">${template.name}</div>
+                <div class="template-desc">${template.steps.length} steps to fix this</div>
+                <button class="btn-start-plan" onclick="app.startTaskFromTemplate('${template.id}')">
+                    Start Guided Fix
+                </button>
+            </div>
+        `;
+    }
+
+    async startTaskFromTemplate(templateId) {
+        this.elements.templatePanel.classList.add('hidden');
+
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                type: 'task_action',
+                action: 'create_from_template',
+                template_id: templateId
+            }));
+        }
+    }
+
+    showTaskPlan(plan) {
+        this.activePlan = plan;
+        this.elements.sidebar.classList.remove('hidden');
+        this.elements.templatePanel.classList.add('hidden');
+        this.elements.kbPanel.classList.add('hidden');
+        this.elements.taskPanel.classList.remove('hidden');
+
+        this.renderTaskPlan(plan);
+
+        // Auto-start if not started
+        if (plan.status === 'created') {
+            this.startPlan(plan.id);
+        }
+    }
+
+    renderTaskPlan(plan) {
+        const progress = plan.progress || { completed: 0, total: 0, percent: 0 };
+
+        let stepsHtml = '';
+        plan.steps.forEach((step, idx) => {
+            let stepClass = 'pending';
+            if (step.status === 'completed') stepClass = 'completed';
+            else if (step.status === 'in_progress') stepClass = 'current';
+
+            stepsHtml += `
+                <div class="task-step ${stepClass}">
+                    <span class="step-icon"></span>
+                    <span>${step.title}</span>
+                </div>
+            `;
+
+            // Show actions for current step
+            if (step.status === 'in_progress') {
+                stepsHtml += `
+                    <div class="step-actions">
+                        <button class="btn-step done" onclick="app.completeStep('${plan.id}', '${step.id}')">Done</button>
+                        <button class="btn-step skip" onclick="app.skipStep('${plan.id}', '${step.id}')">Skip</button>
+                    </div>
+                `;
             }
-        } catch (error) {
-            console.error('TTS error:', error);
-            // Silent fail - text is still shown in chat
+        });
+
+        this.elements.taskContent.innerHTML = `
+            <div class="task-header">
+                <div class="task-title">${plan.title}</div>
+                <div class="task-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress.percent}%"></div>
+                    </div>
+                    <span class="progress-text">${progress.completed}/${progress.total}</span>
+                </div>
+            </div>
+            <div class="task-steps">${stepsHtml}</div>
+        `;
+    }
+
+    async startPlan(planId) {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                type: 'task_action',
+                action: 'start_plan',
+                plan_id: planId
+            }));
+        }
+    }
+
+    async completeStep(planId, stepId) {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                type: 'task_action',
+                action: 'complete_step',
+                plan_id: planId,
+                step_id: stepId
+            }));
+        }
+    }
+
+    async skipStep(planId, stepId) {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                type: 'task_action',
+                action: 'skip_step',
+                plan_id: planId,
+                step_id: stepId
+            }));
+        }
+    }
+
+    updateTaskPlan(plan, nextStep, isComplete) {
+        this.activePlan = plan;
+        this.renderTaskPlan(plan);
+
+        if (isComplete) {
+            this.addMessage('assistant', 'All done! Let me know if you need anything else.');
+            setTimeout(() => {
+                this.elements.taskPanel.classList.add('hidden');
+                if (!this.elements.kbPanel.classList.contains('hidden')) {
+                    // Keep sidebar if KB is showing
+                } else {
+                    this.elements.sidebar.classList.add('hidden');
+                }
+            }, 2000);
+        } else if (nextStep) {
+            this.addMessage('assistant', `Next: ${nextStep.title}`);
+        }
+    }
+
+    handleStepFailed(plan, failedStep, errorMessage) {
+        this.activePlan = plan;
+        this.renderTaskPlan(plan);
+        this.addMessage('assistant', `Step failed: ${errorMessage}`);
+    }
+
+    closeSidebar() {
+        this.elements.kbPanel.classList.add('hidden');
+        this.elements.taskPanel.classList.add('hidden');
+        this.elements.sidebar.classList.add('hidden');
+    }
+
+    closeTemplatePanel() {
+        this.elements.templatePanel.classList.add('hidden');
+        if (this.elements.kbPanel.classList.contains('hidden') &&
+            this.elements.taskPanel.classList.contains('hidden')) {
+            this.elements.sidebar.classList.add('hidden');
         }
     }
 
@@ -558,8 +842,7 @@ class ITSupportAgent {
     // ========================================================================
 
     showError(message) {
-        // For now, show as a chat message
-        this.addMessage('assistant', `⚠️ ${message}`);
+        this.addMessage('assistant', `${message}`);
     }
 }
 
