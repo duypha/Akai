@@ -26,5 +26,5 @@
       "@utils/*": ["utils/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "src/types"]
 }
